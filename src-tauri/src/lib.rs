@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri_plugin_http::reqwest;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[derive(Deserialize)]
-struct Test {
+#[derive(Deserialize, Serialize, Debug)]
+struct Login {
 	user_id: String,
 	mfa: bool,
 	sms: bool,
@@ -13,6 +13,18 @@ struct Test {
 	backup: bool,
 	totp: bool,
 	webauthn: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct UserSettings {
+	locale: String,
+	theme: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct Totp {
+	token: String,
+	user_settings: UserSettings,
 }
 
 #[tauri::command]
@@ -28,12 +40,33 @@ async fn login(login: String, password: String) -> Option<String> {
 		.send()
 		.await
 		.unwrap()
-		.json::<Test>()
+		.json::<Login>()
 		.await
 		.unwrap();
-	let yay = res.user_id;
-	log::info!("user_id = {}", yay);
-	Some(yay)
+	let ticket = res.ticket;
+	log::info!("ticket = {}", ticket);
+	Some(ticket)
+}
+
+#[tauri::command]
+async fn totp(code: String, ticket: String) -> Option<String> {
+	let mut map = HashMap::new();
+	map.insert("code", &code);
+	map.insert("ticket", &ticket);
+
+	let client = reqwest::Client::new();
+	let res = client
+		.post("https://discord.com/api/v9/auth/mfa/totp")
+		.json(&map)
+		.send()
+		.await
+		.unwrap()
+		.json::<Totp>()
+		.await
+		.unwrap();
+	let token = res.token;
+	log::info!("token = {}", token);
+	Some(token)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -48,7 +81,7 @@ pub fn run() {
 		)
 		.plugin(tauri_plugin_http::init())
 		.plugin(tauri_plugin_shell::init())
-		.invoke_handler(tauri::generate_handler![login])
+		.invoke_handler(tauri::generate_handler![login, totp])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
 }
