@@ -18,9 +18,6 @@
     },
     "http:default",
     "log:default",
-    "log:default",
-    "log:default",
-    "log:default",
-    "log:default"
+    "websocket:default"
   ]
 }

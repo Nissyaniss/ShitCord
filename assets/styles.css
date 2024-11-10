@@ -89,8 +89,12 @@ button {
   outline: none;
 }
 
-#login-input {
+.login-input {
   margin-right: 5px;
+}
+
+.error {
+  color: red;
 }
 
 @media (prefers-color-scheme: dark) {

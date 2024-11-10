@@ -17,6 +17,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[web.watcher]
+index_on_404 = true
+
 [dependencies]
 log = "0.4"
 tauri = { version = "2", features = [] }
@@ -25,4 +28,5 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-http = "2"
 tauri-plugin-log = "2"
-
+tauri-plugin-websocket = "2"
+tokio-tungstenite = "0.24.0"

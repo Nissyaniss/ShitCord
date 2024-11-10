@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use tauri_plugin_http::reqwest;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -28,10 +29,20 @@ struct Totp {
 }
 
 #[tauri::command]
-async fn login(login: String, password: String) -> Option<String> {
+async fn login(login: String, password: String) -> String {
 	let mut map = HashMap::new();
 	map.insert("login", &login);
 	map.insert("password", &password);
+
+	let error = json!({
+		"user_id": "Not a user",
+		"mfa": false,
+		"sms": false,
+		"ticket": "Not a user",
+		"backup": false,
+		"totp": false,
+		"webauthn": null
+	});
 
 	let client = reqwest::Client::new();
 	let res = client
@@ -40,12 +51,12 @@ async fn login(login: String, password: String) -> Option<String> {
 		.send()
 		.await
 		.unwrap()
-		.json::<Login>()
-		.await
-		.unwrap();
-	let ticket = res.ticket;
-	log::info!("ticket = {}", ticket);
-	Some(ticket)
+		.json::<Value>()
+		.await;
+	match res {
+		Ok(_) => res.unwrap().to_string(),
+		Err(_) => error.to_string(),
+	}
 }
 
 #[tauri::command]
@@ -65,13 +76,13 @@ async fn totp(code: String, ticket: String) -> Option<String> {
 		.await
 		.unwrap();
 	let token = res.token;
-	log::info!("token = {}", token);
 	Some(token)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	tauri::Builder::default()
+		.plugin(tauri_plugin_websocket::init())
 		.plugin(
 			tauri_plugin_log::Builder::new()
 				.target(tauri_plugin_log::Target::new(
