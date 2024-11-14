@@ -13,6 +13,9 @@
       "allow": [
         {
           "url": "https://discord.com/*"
+        },
+        {
+          "url": "https://cordapi.dolfi.es/api/v2/properties/*"
         }
       ]
     },

@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use std::sync::{Arc, Mutex};
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::{Link, Routable};
 use serde::{Deserialize, Serialize};
@@ -35,17 +37,41 @@ struct TotpArgs {
 	ticket: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct ConnectWebsocketArgs {
+	token: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TotpJson {
+	token: String,
+	user_settings: UserSettings,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UserSettings {
+	locale: String,
+	theme: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LoginJson {
+	user_id: String,
+	mfa: bool,
+	sms: bool,
+	ticket: String,
+	backup: bool,
+	totp: bool,
+	webauthn: Option<String>,
+}
+
 #[derive(Clone)]
 struct User {
 	email: Signal<String>,
 	password: Signal<String>,
-	login_json: Signal<Value>,
-	totp_json: Signal<Value>,
-}
-
-#[derive(Clone, Copy)]
-struct Totp {
 	code: Signal<String>,
+	login_json: Signal<LoginJson>,
+	totp_json: Signal<TotpJson>,
 }
 
 #[component]
@@ -61,33 +87,34 @@ pub fn Login() -> Element {
 	let mut user = use_context_provider(|| User {
 		email: Signal::new(String::new()),
 		password: Signal::new(String::new()),
-		login_json: Signal::new(json!({
-			"user_id": "",
-			"mfa": false,
-			"sms": false,
-			"ticket": null,
-			"backup": false,
-			"totp": false,
-			"webauthn": null
-		})),
-		totp_json: Signal::new(json!({
-			"token": null,
-			"user_settings": {
-				"locale": null,
-				"theme": null
-			}
-		})),
+		code: Signal::new(String::new()),
+		login_json: Signal::new(LoginJson {
+			user_id: String::new(),
+			mfa: false,
+			sms: false,
+			ticket: String::new(),
+			backup: false,
+			totp: false,
+			webauthn: Some(String::new()),
+		}),
+		totp_json: Signal::new(TotpJson {
+			token: String::new(),
+			user_settings: UserSettings {
+				locale: String::new(),
+				theme: String::new(),
+			},
+		}),
 	});
 
-	let mut totp = use_context_provider(|| Totp {
-		code: Signal::new(String::new()),
-	});
+	// let mut totp = use_context_provider(|| Totp {
+	// 	code: Signal::new(String::new()),
+	// });
 
 	rsx! {
 		link { rel: "stylesheet", href: "styles.css" }
 		main {
 			class: "container",
-			if user.login_json.read()["ticket"] == *"Not a user" || user.login_json.read()["ticket"].is_null() {
+			if user.login_json.read().ticket == *"Not a user" || user.login_json.read().ticket.is_empty() {
 				form {
 					class: "row",
 					onsubmit: login,
@@ -109,21 +136,21 @@ pub fn Login() -> Element {
 					button { r#type: "submit", "Login" },
 				}
 			},
-			if user.login_json.read()["ticket"] == *"Not a user" {
+			if user.login_json.read().ticket == *"Not a user" {
 				p {
 					class: "error",
 					"Email or password incorrect."
 				}
 			}
-			if user.login_json.read()["ticket"] != *"Not a user" && !user.login_json.read()["ticket"].is_null() && user.login_json.read()["totp"] == true {
+			if user.login_json.read().ticket != *"Not a user" && !user.login_json.read().ticket.is_empty() && user.login_json.read().totp == true {
 				form {
 					class: "row",
-					onsubmit: login,
+					onsubmit: totp,
 					input {
 						id: "login-input",
 						placeholder: "Enter un code",
-						value: "{totp.code}",
-						oninput: move |event| totp.code.set(event.value())
+						value: "{user.code}",
+						oninput: move |event| user.code.set(event.value())
 					},
 					button { r#type: "submit", "Confirmer" },
 				}
@@ -158,15 +185,14 @@ async fn login(_form_event: FormEvent) {
 
 async fn totp(_form_event: FormEvent) {
 	let mut user = use_context::<User>();
-	let totp = use_context::<Totp>();
 
-	if totp.code.read().is_empty() {
+	if user.code.read().is_empty() {
 		return;
 	}
 
 	let totp_args = serde_wasm_bindgen::to_value(&TotpArgs {
-		code: totp.code.read().to_string(),
-		ticket: user.login_json.read()["ticket"].to_string(),
+		code: user.code.read().to_string(),
+		ticket: user.login_json.read().ticket.to_string(),
 	})
 	.unwrap();
 	user.totp_json.set(
